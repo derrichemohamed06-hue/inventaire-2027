@@ -1,0 +1,9 @@
+{
+  "name":"Inventaire",
+  "short_name":"Inventaire",
+  "start_url":"./index.html",
+  "display":"standalone",
+  "background_color":"#f9fafb",
+  "theme_color":"#111827",
+  "icons":[]
+}

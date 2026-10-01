@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<link rel="manifest" href="manifest.json">
+<title>Inventaire</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial;color:#111827}
+.app{max-width:600px;margin:auto;min-height:100vh;background:#f9fafb;padding-bottom:90px}
+header{padding:22px 18px 10px;position:sticky;top:0;background:rgba(249,250,251,.94);backdrop-filter:blur(12px);z-index:5}
+h1{margin:0 0 14px;font-size:30px}.search{width:100%;padding:13px 15px;border:1px solid #d1d5db;border-radius:14px;font-size:16px}
+main{padding:10px 16px}.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px}.card{background:white;border-radius:18px;padding:16px;box-shadow:0 2px 10px #0000000b}.card b{font-size:24px}.muted{color:#6b7280;font-size:13px}.red{color:#dc2626}
+.section{margin-top:22px}.section h2{font-size:18px}.item{background:white;border-radius:16px;padding:15px;margin:9px 0;display:flex;justify-content:space-between;gap:12px;box-shadow:0 2px 8px #00000009}.item small{display:block;color:#6b7280;margin-top:4px}.qty{font-size:20px;font-weight:700}.low{color:#dc2626}
+nav{position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid #e5e7eb;display:flex;justify-content:center;z-index:10}.navin{max-width:600px;width:100%;display:flex;justify-content:space-around;padding:10px 5px env(safe-area-inset-bottom)}nav button{border:0;background:none;font-size:12px;color:#6b7280}nav button.active{color:#111827;font-weight:700}
+button.primary{background:#111827;color:white;border:0;border-radius:14px;padding:13px 17px;font-weight:700}.fab{position:fixed;right:20px;bottom:78px;border-radius:50%;width:56px;height:56px;font-size:28px}
+.modal{display:none;position:fixed;inset:0;background:#0008;z-index:20;align-items:flex-end}.modal.show{display:flex}.sheet{background:white;width:100%;max-width:600px;margin:auto;border-radius:24px 24px 0 0;padding:20px;max-height:90vh;overflow:auto}.sheet h2{margin-top:0}label{display:block;font-size:13px;color:#4b5563;margin:12px 0 5px}input,select{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:12px;font-size:16px}.actions{display:flex;gap:10px;margin-top:18px}.actions button{flex:1}.secondary{border:1px solid #d1d5db;background:white;color:#111827;border-radius:14px;padding:13px;font-weight:700}
+.toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#111827;color:white;padding:12px 16px;border-radius:12px;display:none;z-index:30}
+</style>
+</head>
+<body>
+<div class="app">
+<header><h1>Inventaire</h1><input id="search" class="search" placeholder="🔎 Rechercher un article"></header>
+<main id="content"></main>
+</div>
+<nav><div class="navin">
+<button id="homeTab" class="active" onclick="setTab('home')">🏠<br>Accueil</button>
+<button id="stockTab" onclick="setTab('stock')">📦<br>Stock</button>
+<button id="movesTab" onclick="setTab('moves')">🔄<br>Mouvements</button>
+<button id="statsTab" onclick="setTab('stats')">📊<br>Stats</button>
+</div></nav>
+<button class="primary fab" onclick="openModal()">+</button>
+
+<div id="modal" class="modal" onclick="if(event.target===this)closeModal()"><div class="sheet">
+<h2>Ajouter un article</h2>
+<label>Nom *</label><input id="nom" placeholder="Ex. Câble RJ45">
+<label>Référence</label><input id="ref" placeholder="Ex. CAB-001">
+<label>Quantité</label><input id="qty" type="number" min="0" value="0">
+<label>Seuil minimum</label><input id="seuil" type="number" min="0" value="0">
+<label>Emplacement</label><input id="empl" placeholder="Ex. Étagère A2">
+<label>Prix unitaire (€)</label><input id="prix" type="number" min="0" step="0.01" value="0">
+<label>Code-barres</label><input id="barcode" placeholder="Optionnel">
+<div class="actions"><button class="secondary" onclick="closeModal()">Annuler</button><button class="primary" onclick="addArticle()">Ajouter</button></div>
+</div></div>
+<div id="toast" class="toast"></div>
+<script>
+let articles=JSON.parse(localStorage.getItem("inventaire_articles")||"[]");
+let moves=JSON.parse(localStorage.getItem("inventaire_moves")||"[]");
+let tab="home";
+const eur=n=>new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n||0);
+function save(){localStorage.setItem("inventaire_articles",JSON.stringify(articles));localStorage.setItem("inventaire_moves",JSON.stringify(moves))}
+function toast(t){let x=document.getElementById("toast");x.textContent=t;x.style.display="block";setTimeout(()=>x.style.display="none",1800)}
+function setTab(t){tab=t;document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));document.getElementById(t==="home"?"homeTab":t==="stock"?"stockTab":t==="moves"?"movesTab":"statsTab").classList.add("active");render()}
+function render(){
+ let q=document.getElementById("search").value.toLowerCase();
+ let list=articles.filter(a=>(a.nom+" "+a.ref+" "+a.empl+" "+a.barcode).toLowerCase().includes(q));
+ let value=articles.reduce((s,a)=>s+a.qty*a.prix,0), low=articles.filter(a=>a.qty<=a.seuil).length, units=articles.reduce((s,a)=>s+a.qty,0);
+ let c=document.getElementById("content");
+ if(tab==="home") c.innerHTML=`<div class="cards"><div class="card"><span class="muted">Articles</span><br><b>${articles.length}</b></div><div class="card"><span class="muted">Unités</span><br><b>${units}</b></div><div class="card"><span class="muted">Stock faible</span><br><b class="${low?'red':''}">${low}</b></div><div class="card"><span class="muted">Valeur</span><br><b>${eur(value)}</b></div></div><div class="section"><h2>⚠️ Stock faible</h2>${articles.filter(a=>a.qty<=a.seuil).map(card).join("")||'<div class="card">Aucune alerte.</div>'}</div>`;
+ else if(tab==="stock") c.innerHTML=`<div class="section"><h2>📦 Inventaire (${list.length})</h2>${list.map(card).join("")||'<div class="card">Aucun article.</div>'}</div>`;
+ else if(tab==="moves") c.innerHTML=`<div class="section"><h2>🔄 Historique</h2>${moves.slice().reverse().map(m=>`<div class="item"><div><b>${m.nom}</b><small>${m.date} · ${m.type}</small></div><div class="qty">${m.type==="Entrée"?"+":"-"}${m.qty}</div></div>`).join("")||'<div class="card">Aucun mouvement.</div>'}</div>`;
+ else c.innerHTML=`<div class="cards"><div class="card"><span class="muted">Références</span><br><b>${articles.length}</b></div><div class="card"><span class="muted">Valeur</span><br><b>${eur(value)}</b></div></div><div class="section"><div class="card"><b>État du stock</b><p>${low} article(s) sous le seuil minimum.</p><p>${units} unité(s) au total.</p></div></div>`;
+}
+function card(a){return `<div class="item" onclick="movement('${a.id}')"><div><b>${esc(a.nom)}</b><small>${esc(a.ref||"Sans référence")} · ${esc(a.empl||"Sans emplacement")}</small><small>${eur(a.prix)} / unité</small></div><div><div class="qty ${a.qty<=a.seuil?'low':''}">${a.qty}</div><small>${a.qty<=a.seuil?'⚠️ faible':'unités'}</small></div></div>`}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function openModal(){document.getElementById("modal").classList.add("show");document.getElementById("nom").focus()}
+function closeModal(){document.getElementById("modal").classList.remove("show")}
+function addArticle(){
+ let nom=document.getElementById("nom").value.trim();if(!nom){toast("Le nom est obligatoire");return}
+ articles.push({id:crypto.randomUUID(),nom,ref:document.getElementById("ref").value.trim(),qty:+document.getElementById("qty").value||0,seuil:+document.getElementById("seuil").value||0,empl:document.getElementById("empl").value.trim(),prix:+document.getElementById("prix").value||0,barcode:document.getElementById("barcode").value.trim()});
+ save();closeModal();["nom","ref","empl","barcode"].forEach(id=>document.getElementById(id).value="");render();toast("Article ajouté");
+}
+function movement(id){
+ let a=articles.find(x=>x.id===id);if(!a)return;
+ let type=prompt(`Article : ${a.nom}\nStock actuel : ${a.qty}\n\nTape E pour une entrée ou S pour une sortie.`);
+ if(!type)return;type=type.toUpperCase();
+ if(type!=="E"&&type!=="S"){toast("Choisis E ou S");return}
+ let n=parseInt(prompt("Quantité :","1"));if(!n||n<1)return;
+ if(type==="S")a.qty=Math.max(0,a.qty-n);else a.qty+=n;
+ moves.push({nom:a.nom,type:type==="E"?"Entrée":"Sortie",qty:n,date:new Date().toLocaleString("fr-FR")});save();render();toast("Stock mis à jour");
+}
+document.getElementById("search").addEventListener("input",render);
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+render();
+</script>
+</body>
+</html>
